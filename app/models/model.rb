@@ -23,30 +23,24 @@ class Model
       klass.class_eval{
         include ::ModelSync
         childs.keys.each{|child|
-          multiple = child =~ /_many$/
           with_parent = child =~ /with_parent/
-          if multiple
-            has_many child.to_s.pluralize.to_sym
-          else
-            has_one child
-          end
-          belongs_to parent.to_sym if parent
-
-          if multiple
+          if child =~ /_many$/
             child_name = child.to_s.pluralize.to_sym
             as_name = "as_#{child}".pluralize.to_sym
+            has_many child_name
             sync_childs child_name, include: true
             sync_childs as_name, ->{send child_name}, include: true, with_parent: with_parent
           else
+            has_one child
             sync_child child, include: true
             sync_child "as_#{child}".to_sym, ->{send child}, include: true, with_parent: with_parent
           end
         }
         if parent
+          belongs_to parent
           sync_parent parent
-          multiple = name =~ /_many$/
           as_name = "as_#{name}"
-          as_name = as_name.pluralize if name =~ /many/
+          as_name = as_name.pluralize if name =~ /_many$/
           sync_parent parent, as: as_name
         end
 
