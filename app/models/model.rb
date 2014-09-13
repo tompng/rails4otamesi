@@ -1,4 +1,20 @@
 class Model
+  def self.structure
+    {
+      root: {
+        branch_one: {
+          leaf_one_one: {},
+          leaf_one_many: {}
+        },
+        branch_many: {
+          leaf_many_one: {},
+          leaf_many_many: {}
+        },
+        branch_with_parent_one: {},
+        branch_with_parent_many: {}
+      }
+    }
+  end
   gen = ->(hash, parent=nil){
     hash.each do |name, childs|
       klass = Class.new(ActiveRecord::Base)
@@ -38,17 +54,5 @@ class Model
       Model.const_set name.to_s.camelize, klass
     end
   }
-  gen[
-    root: {
-      branch_one: {
-        leaf_one_one: {},
-        leaf_one_many: {}
-      },
-      branch_many: {
-        leaf_many_one: {},
-        leaf_many_many: {}
-      },
-      branch_with_parent: {}
-    }
-  ]
+  gen[structure]
 end
