@@ -22,17 +22,20 @@ class Model
       gen[childs, name]
       klass.class_eval{
         include ::ModelSync
+        define_method :to_notification_hash do
+          as_json.merge rand: rand
+        end
         childs.keys.each{|child|
           with_parent = child =~ /with_parent/
           if child =~ /_many$/
             child_name = child.to_s.pluralize.to_sym
             as_name = "as_#{child}".pluralize.to_sym
             has_many child_name
-            sync_childs child_name, include: true
+            sync_childs child_name, include: true, with_parent: with_parent
             sync_childs as_name, ->{send child_name}, include: true, with_parent: with_parent
           else
             has_one child
-            sync_child child, include: true
+            sync_child child, include: true, with_parent: with_parent
             sync_child "as_#{child}".to_sym, ->{send child}, include: true, with_parent: with_parent
           end
         }

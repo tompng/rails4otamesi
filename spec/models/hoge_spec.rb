@@ -9,7 +9,7 @@ describe Model do
       klass.class_eval{
         after_save :notify_create, on: :create
         after_save :notify_update, on: :update
-        after_save :notify_destroy, on: :destroy
+        after_destroy :notify_destroy
       }
     end
   }
@@ -30,22 +30,31 @@ describe Model do
     }
   end
 
+  def node_events
+    events_format *NodeNotification.events
+  end
+  def events_format *arr
+    arr.map{|args|
+      obj, arg = args
+      type = (arg && arg[:type]) || :updated
+      key = arg && arg[:key]
+      ["#{obj.class.name}##{obj.id}", type, key]
+    }.sort_by{|a|a.to_s}
+  end
+
   it 'root' do
     root = Model::Root.first
     root.update name: 'aaa'
-    one = root.branch_with_parent_one
-    manies = root.branch_with_parent_manies
-
-    events = [
-      [root, data: root.to_notification_hash],
-      [root, key: ['branch_with_parent_one', one.id], data: one.to_notification_hash],
-      *manies.map{|child|
-        [root, key: ['branch_with_parent_many',child.id], data: child.to_notification_hash]
-      }
-    ]
-    expect(NodeNotification.events.size).to eq events.size
-    binding.pry
+    expect(node_events).to eq events_format(
+      [root],
+      [root, key: ['branch_with_parent_one']],
+      [root, key: ['branch_with_parent_manies']],
+      [root, key: ['as_branch_with_parent_one']],
+      [root, key: ['as_branch_with_parent_manies']]
+    )
   end
+
+  
 
 
 end

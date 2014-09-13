@@ -128,7 +128,7 @@ module ModelSync
     if option[:multiple]
       child.map{|model|[model.id, model.to_notification_hash_with_inclusions]}.to_h
     else
-      ActiveRecord::Base == child ? child.to_notification_hash_with_inclusions : child
+      ActiveRecord::Base === child ? child.to_notification_hash_with_inclusions : child
     end
   end
 

@@ -3,7 +3,7 @@ module NodeNotification
     def notify arg
       key = arg[:key]
       data = arg[:data]
-      events << ["#{key.class.name}##{key.id}",data]
+      events << [key,data]
     end
 
     def clear
