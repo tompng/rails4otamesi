@@ -34,7 +34,7 @@ class Model
 
           if multiple
             child_name = child.to_s.pluralize.to_sym
-            as_name = "as_#{name}".pluralize.to_sym
+            as_name = "as_#{child}".pluralize.to_sym
             sync_childs child_name, include: true
             sync_childs as_name, ->{send child_name}, include: true, with_parent: with_parent
           else

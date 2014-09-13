@@ -68,12 +68,8 @@ module ModelSync
   end
 
   def notify_update
-    begin
     notify_to_parent type: :updated, data: to_notification_hash_with_inclusions
     notify_self unless self.class.notify_only_to_parent?
-    rescue => e
-      binding.pry
-    end
   end
 
   def notify_child_update name
