@@ -9,11 +9,11 @@ module ModelSync
       def sync_parent method, option={}
         unknown_options = option.keys - [:as]
         raise "Unknown option #{unknown_options}" if unknown_options.present?
-        sync_parents_hash[method] = option
+        sync_parents_array << [method, option]
       end
 
-      def sync_parents_hash
-        @sync_parents ||= ActiveSupport::HashWithIndifferentAccess.new
+      def sync_parents_array
+        @sync_parents ||= []
       end
 
       def sync_childs_hash
@@ -47,10 +47,11 @@ module ModelSync
   end
 
   def notify_to_parent data, recursive_keys=nil
-    self.class.sync_parents_hash.each{|method, option|
+    self.class.sync_parents_array.each{|method, option|
       parent = send method
       next unless parent
       association_info = parent.sync_child_info_for option[:as] || self.class
+      binding.pry unless association_info
 
       if association_info[:multiple]
         key = [association_info[:name], id, *recursive_keys]

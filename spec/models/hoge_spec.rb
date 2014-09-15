@@ -3,15 +3,15 @@ require 'spec_helper'
 describe Model do
   before{
     Fixture.load
-    NodeNotification.clear
     Model.constants.each do |name|
       klass = Model.const_get name
       klass.class_eval{
-        after_save :notify_create, on: :create
-        after_save :notify_update, on: :update
+        after_create :notify_create, on: :create
+        after_update :notify_update, on: :update
         after_destroy :notify_destroy
       }
     end
+    NodeNotification.clear
   }
   it 'fixtures loaded' do
     expected = {
@@ -36,25 +36,132 @@ describe Model do
   def events_format *arr
     arr.map{|args|
       obj, arg = args
-      type = (arg && arg[:type]) || :updated
-      key = arg && arg[:key]
+      arg ||= {}
+      type = arg[:type] || :updated
+      key = arg[:key].try(:map, &:to_s)
       ["#{obj.class.name}##{obj.id}", type, key]
     }.sort_by{|a|a.to_s}
   end
 
   it 'root' do
     root = Model::Root.first
-    root.update name: 'aaa'
+    root.update name: :aaa
     expect(node_events).to eq events_format(
       [root],
       [root, key: ['branch_with_parent_one']],
-      [root, key: ['branch_with_parent_manies']],
-      [root, key: ['as_branch_with_parent_one']],
-      [root, key: ['as_branch_with_parent_manies']]
+      [root, key: ['branch_with_parent_manies']]
     )
   end
 
-  
+  context 'branch' do
+    it 'one' do
+      root = Model::Root.first
+      record = root.branch_one
+      record.update name: :aaa
+      expect(node_events).to eq events_format(
+        [record],
+        [root, key: ['branch_one']],
+      )
+    end
+    it 'change one' do
+      root = Model::Root.first
+      root.branch_one.destroy
+      NodeNotification.clear
+      root.branch_one = Model::BranchOne.new
+      expect(node_events).to eq events_format(
+        [root, type: :created, key: ['branch_one']],
+      )
+    end
+    it 'delete one' do
+      root = Model::Root.first
+      record = root.branch_one
+      record.destroy
+      expect(node_events).to eq events_format(
+        [record, type: :deleted],
+        [root, type: :deleted, key: ['branch_one']],
+      )
+    end
+    it 'many' do
+      root = Model::Root.first
+      record = root.branch_manies.first
+      record.update name: :aaa
+      expect(node_events).to eq events_format(
+        [record],
+        [root, key: ['branch_manies', record.id]],
+      )
+    end
+    it 'create many' do
+      root = Model::Root.first
+      record = root.branch_manies.create
+      expect(node_events).to eq events_format(
+        [root, type: :created, key: ['branch_manies', record.id]],
+      )
+    end
+    it 'delete many' do
+      root = Model::Root.first
+      record = root.branch_manies.first
+      record.destroy
+      expect(node_events).to eq events_format(
+        [record, type: :deleted],
+        [root, type: :deleted, key: ['branch_manies', record.id]],
+      )
+    end
+  end
 
+  [
+    ['root','branch_one', 'leaf_one_one'],
+    ['root','branch_one', 'leaf_one_many'],
+    ['root','branch_many', 'leaf_many_one'],
+    ['root','branch_many', 'leaf_many_many']
+  ].each do |rname, bname, lname|
+    context lname do
+      let(:klass){Model.const_get lname.camelize}
+      let!(:leaf){klass.first}
+      let!(:branch){leaf.send(bname)}
+      let!(:root){branch.send(rname)}
+      let(:branch_multiple){bname =~ /_many$/}
+      let(:multiple){lname =~ /_many$/}
+      let(:targets){
+        ->(leaf){
+          bkey = branch_multiple ? [bname.pluralize, branch.id] : [bname]
+          lkey = multiple ? [lname.pluralize, leaf.id] : [lname]
+          [
+            [root,key: [*bkey, *lkey]],
+            [branch,key: lkey],
+            [leaf]
+          ]
+        }
+      }
+      it 'create' do
+        data = root.to_front_hash.to_json
+        unless multiple
+          leaf.destroy
+          NodeNotification.clear
+        end
+        newleaf = klass.create "#{bname}_id" => branch.id
+        expect(node_events).to eq events_format(
+          *targets[newleaf].reject{|a,b|a==newleaf}.map{|a,b|[a,(b||{}).merge(type: :created)]}
+        )
+      end
+
+      it 'update' do
+        data = JSON.parse(root.to_front_hash.to_json)
+        leaf.update name: :aaa
+        expect(node_events).to eq events_format(*targets[leaf])
+        binding.pry
+        expect(JSEval.eval_notification data, NodeNotification.events).to eq JSON.parse(root.reload.to_front_hash.to_json)
+      end
+
+      it 'delete' do
+        data = JSON.parse(root.to_front_hash.to_json)
+        leaf.destroy
+        expect(node_events).to eq events_format(
+          *targets[leaf].map{|a,b|[a,(b||{}).merge(type: :deleted)]}
+        )
+        # expect(JSEval.eval_notification data, NodeNotification.events).to eq JSON.parse(root.to_front_hash.to_json)
+      end
+    end
+  end
 
 end
+
