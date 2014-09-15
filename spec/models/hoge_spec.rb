@@ -42,6 +42,14 @@ describe Model do
       ["#{obj.class.name}##{obj.id}", type, key]
     }.sort_by{|a|a.to_s}
   end
+  def deep_compact hash
+    rec = ->(hash){
+      hash.compact.map{|a,b|
+        [a,Hash===b ? rec[b] : b]
+      }.to_h
+    }
+    rec[JSON.parse hash.to_json]
+  end
 
   it 'root' do
     root = Model::Root.first
@@ -133,7 +141,7 @@ describe Model do
         }
       }
       it 'create' do
-        data = root.to_front_hash.to_json
+        data = JSON.parse(root.to_front_hash.to_json)
         unless multiple
           leaf.destroy
           NodeNotification.clear
@@ -142,14 +150,14 @@ describe Model do
         expect(node_events).to eq events_format(
           *targets[newleaf].reject{|a,b|a==newleaf}.map{|a,b|[a,(b||{}).merge(type: :created)]}
         )
+        expect(deep_compact(JSEval.eval_notification data, NodeNotification.events)).to eq deep_compact(root.reload.to_front_hash)
       end
 
       it 'update' do
         data = JSON.parse(root.to_front_hash.to_json)
         leaf.update name: :aaa
         expect(node_events).to eq events_format(*targets[leaf])
-        binding.pry
-        expect(JSEval.eval_notification data, NodeNotification.events).to eq JSON.parse(root.reload.to_front_hash.to_json)
+        expect(deep_compact(JSEval.eval_notification data, NodeNotification.events)).to eq deep_compact(root.reload.to_front_hash)
       end
 
       it 'delete' do
@@ -158,7 +166,7 @@ describe Model do
         expect(node_events).to eq events_format(
           *targets[leaf].map{|a,b|[a,(b||{}).merge(type: :deleted)]}
         )
-        # expect(JSEval.eval_notification data, NodeNotification.events).to eq JSON.parse(root.to_front_hash.to_json)
+        expect(deep_compact(JSEval.eval_notification data, NodeNotification.events)).to eq deep_compact(root.reload.to_front_hash)
       end
     end
   end
