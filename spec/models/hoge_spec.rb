@@ -150,14 +150,30 @@ describe Model do
         expect(node_events).to eq events_format(
           *targets[newleaf].reject{|a,b|a==newleaf}.map{|a,b|[a,(b||{}).merge(type: :created)]}
         )
-        expect(deep_compact(JSEval.eval_notification data, NodeNotification.events)).to eq deep_compact(root.reload.to_front_hash)
+        result = JSEval.eval_notification data, NodeNotification.events
+        expect(deep_compact result['output']).to eq deep_compact(root.reload.to_front_hash)
+        expect(result['errors']).to eq []
+        expect(result['events']).to eq [
+          lname, "#{lname}_name", bname,
+          (lname.pluralize if multiple),
+          (bname.pluralize if branch_multiple),
+          rname
+        ].compact.sort
       end
 
       it 'update' do
         data = JSON.parse(root.to_front_hash.to_json)
         leaf.update name: :aaa
         expect(node_events).to eq events_format(*targets[leaf])
-        expect(deep_compact(JSEval.eval_notification data, NodeNotification.events)).to eq deep_compact(root.reload.to_front_hash)
+        result = JSEval.eval_notification data, NodeNotification.events
+        expect(deep_compact result['output']).to eq deep_compact(root.reload.to_front_hash)
+        expect(result['errors']).to eq []
+        expect(result['events']).to eq [
+          lname, "#{lname}_name", bname,
+          (lname.pluralize if multiple),
+          (bname.pluralize if branch_multiple),
+          rname
+        ].compact.sort
       end
 
       it 'delete' do
@@ -166,7 +182,15 @@ describe Model do
         expect(node_events).to eq events_format(
           *targets[leaf].map{|a,b|[a,(b||{}).merge(type: :deleted)]}
         )
-        expect(deep_compact(JSEval.eval_notification data, NodeNotification.events)).to eq deep_compact(root.reload.to_front_hash)
+        result = JSEval.eval_notification data, NodeNotification.events
+        expect(deep_compact result['output']).to eq deep_compact(root.reload.to_front_hash)
+        expect(result['errors']).to eq []
+        expect(result['events']).to eq [
+          lname, bname,
+          (lname.pluralize if multiple),
+          (bname.pluralize if branch_multiple),
+          rname
+        ].compact.sort
       end
     end
   end
