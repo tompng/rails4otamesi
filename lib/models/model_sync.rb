@@ -136,6 +136,6 @@ module ModelSync
   def to_front_hash
     self.class.sync_childs_hash.keys.map{|name|
       [name, notification_hash_for(name)]
-    }.to_h.merge to_notification_hash_with_inclusions
+    }.to_h.merge to_notification_hash
   end
 end
