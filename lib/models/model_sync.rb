@@ -103,7 +103,7 @@ module ModelSync
 
   def to_notification_hash_with_inclusions
     data = to_notification_hash
-    self.class.sync_childs_hash.select{|name, option|
+    self.class.sync_childs_hash.each{|name, option|
       data[name] = notification_hash_for name if option[:include]
     }
     data
