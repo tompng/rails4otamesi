@@ -111,7 +111,7 @@ module ModelSync
 
   def sync_child_info_for arg
     if Class === arg
-      name = arg.name.underscore
+      name = arg.class_name.underscore
       self.class.sync_childs_hash[name] || self.class.sync_childs_hash[name.pluralize]
     else
       self.class.sync_childs_hash[arg]
