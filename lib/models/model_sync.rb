@@ -7,7 +7,7 @@ module ModelSync
     after_commit :notify_destroy, on: :destroy
     class << self
       def sync_parent method, option={}
-        unknown_options = option.keys - [:as]
+        unknown_options = option.keys - [:as, :only_to]
         raise "Unknown option #{unknown_options}" if unknown_options.present?
         sync_parents_array << [method, option]
       end
@@ -46,31 +46,39 @@ module ModelSync
     end
   end
 
-  def notify_to_parent data, recursive_keys=nil
+  def notify_to_parent data, recursive_keys=nil, specific = nil
     self.class.sync_parents_array.each{|method, option|
       parent = send method
       next unless parent
       association_info = parent.sync_child_info_for option[:as] || self.class
-      binding.pry unless association_info
 
       if association_info[:multiple]
         key = [association_info[:name], id, *recursive_keys]
       else
         key = [association_info[:name], *recursive_keys]
       end
-
-      NodeNotification.notify key: parent, data: data.merge(key: key)
-      parent.notify_to_parent data, key if association_info[:include]
+      if option[:only_to]
+        parent_specific = instance_exec &option[:only_to]
+        next if parent_specific.nil?
+        next if specific && specific != parent_specific
+        specific ||= parent_specific
+      end
+      NodeNotification.notify key: parent, specific: specific, data: data.merge(key: key)
+      parent.notify_to_parent data, key, specific if association_info[:include]
     }
   end
 
   def notify_create
     notify_to_parent type: :created, data: to_notification_hash_with_inclusions
+  rescue => e
+    Rails.logger.error e
   end
 
   def notify_update
     notify_to_parent type: :updated, data: to_notification_hash_with_inclusions
     notify_self unless self.class.notify_only_to_parent?
+  rescue => e
+    Rails.logger.error e
   end
 
   def notify_child_update name
@@ -87,24 +95,27 @@ module ModelSync
       data: to_notification_hash
     }
     self.class.sync_childs_hash.each{|method, option|
-      next unless option[:with_parent]
-      notify_child_update method
+      notify_child_update method if option[:with_parent]
     }
   end
 
   def notify_destroy
     notify_to_parent type: :deleted
     NodeNotification.notify key: self, data: {type: :deleted}
+  rescue => e
+    Rails.logger.error e
   end
 
   def to_notification_hash
     as_json
   end
 
-  def to_notification_hash_with_inclusions
+  def to_notification_hash_with_inclusions specific=nil
     data = to_notification_hash
     self.class.sync_childs_hash.each{|name, option|
-      data[name] = notification_hash_for name if option[:include]
+      next unless option[:include]
+      next if option[:block] && option[:block].arity == 1 && specific.nil?
+      data[name] = notification_hash_for name, specific
     }
     data
   end
@@ -119,23 +130,29 @@ module ModelSync
 
   end
 
-  def notification_hash_for name
+  def notification_hash_for name, specific=nil
     option = self.class.sync_childs_hash[name]
-    if option[:block]
-      child = instance_exec &option[:block]
+    block = option[:block]
+    if block
+      if block.arity == 1
+        return if specific.nil?
+        child = instance_exec specific, &block
+      else
+        child = instance_exec &block
+      end
     else
       child = send name
     end
     if option[:multiple]
-      child.map{|model|[model.id, model.to_notification_hash_with_inclusions]}.to_h
+      child.map{|model|[model.id, model.to_notification_hash_with_inclusions(specific)]}.to_h
     else
-      ActiveRecord::Base === child ? child.to_notification_hash_with_inclusions : child
+      ActiveRecord::Base === child ? child.to_notification_hash_with_inclusions(specific) : child
     end
   end
 
-  def to_front_hash
+  def to_front_hash specific=nil
     self.class.sync_childs_hash.keys.map{|name|
-      [name, notification_hash_for(name)]
+      [name, notification_hash_for(name, specific)]
     }.to_h.merge to_notification_hash
   end
 end
